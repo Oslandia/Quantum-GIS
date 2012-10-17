@@ -3931,7 +3931,7 @@ QString QgsGeometry::exportToWkt()
 
   QGis::WkbType wkbType;
   bool hasZValue = false;
-  double *x, *y;
+  double *x, *y, *z;
 
   QString mWkt; // TODO: rename
 
@@ -3942,6 +3942,7 @@ QString QgsGeometry::exportToWkt()
   switch ( wkbType )
   {
     case QGis::WKBPoint25D:
+      hasZValue = true;
     case QGis::WKBPoint:
     {
       mWkt += "POINT(";
@@ -3950,6 +3951,12 @@ QString QgsGeometry::exportToWkt()
       mWkt += " ";
       y = ( double * )( mGeometry + 5 + sizeof( double ) );
       mWkt += QString::number( *y, 'f', 6 ).remove( QRegExp( "[0]{1,5}$" ) );
+      if ( hasZValue )
+      {
+	mWkt += " ";
+	z = ( double * )( mGeometry + 5 + sizeof( double ) * 2);
+	mWkt += QString::number( *z, 'f', 6 ).remove( QRegExp( "[0]{1,5}$" ) );
+      }
       mWkt += ")";
       return mWkt;
     }
@@ -3983,7 +3990,10 @@ QString QgsGeometry::exportToWkt()
         ptr += sizeof( double );
         if ( hasZValue )
         {
-          ptr += sizeof( double );
+	  mWkt += " ";
+	  z = ( double * ) ptr;
+	  mWkt += QString::number( *z, 'f', 6 ).remove( QRegExp( "[0]{1,5}$" ) );
+	  ptr += sizeof( double );
         }
       }
       mWkt += ")";
@@ -4038,6 +4048,9 @@ QString QgsGeometry::exportToWkt()
           ptr += sizeof( double );
           if ( hasZValue )
           {
+	    mWkt += " ";
+	    z = ( double * ) ptr;
+	    mWkt += QString::number( *z, 'f', 6 ).remove( QRegExp( "[0]{1,5}$" ) );
             ptr += sizeof( double );
           }
         }
@@ -4076,6 +4089,9 @@ QString QgsGeometry::exportToWkt()
         ptr += sizeof( double );
         if ( hasZValue )
         {
+	  mWkt += " ";
+	  z = ( double * )( ptr );
+	  mWkt += QString::number( *z, 'f', 6 ).remove( QRegExp( "[0]{1,5}$" ) );
           ptr += sizeof( double );
         }
       }
@@ -4120,6 +4136,9 @@ QString QgsGeometry::exportToWkt()
           ptr += sizeof( double );
           if ( hasZValue )
           {
+	    mWkt += " ";
+	    z = ( double * )( ptr );
+	    mWkt += QString::number( *z, 'f', 6 ).remove( QRegExp( "[0]{1,5}$" ) );
             ptr += sizeof( double );
           }
         }
@@ -4176,6 +4195,9 @@ QString QgsGeometry::exportToWkt()
             ptr += sizeof( double );
             if ( hasZValue )
             {
+	      mWkt += " ";
+	      z = ( double * )( ptr );
+	      mWkt += QString::number( *z, 'f', 6 ).remove( QRegExp( "[0]{1,5}$" ) );
               ptr += sizeof( double );
             }
           }
@@ -6105,7 +6127,11 @@ QgsPoint QgsGeometry::asPoint( unsigned char*& ptr, bool hasZValue )
   ptr += 2 * sizeof( double );
 
   if ( hasZValue )
+  {
+    double *z = ( double *)( ptr );
     ptr += sizeof( double );
+    return QgsPoint( *x, *y, *z );
+  }
 
   return QgsPoint( *x, *y );
 }
@@ -6113,7 +6139,7 @@ QgsPoint QgsGeometry::asPoint( unsigned char*& ptr, bool hasZValue )
 
 QgsPolyline QgsGeometry::asPolyline( unsigned char*& ptr, bool hasZValue )
 {
-  double x, y;
+  double x, y, z;
   ptr += 5;
   unsigned int nPoints = *(( int* )ptr );
   ptr += 4;
@@ -6128,10 +6154,16 @@ QgsPolyline QgsGeometry::asPolyline( unsigned char*& ptr, bool hasZValue )
 
     ptr += 2 * sizeof( double );
 
-    line[i] = QgsPoint( x, y );
-
-    if ( hasZValue ) // ignore Z value
+    if ( hasZValue )
+    {
+      z = *(( double * ) ptr );
       ptr += sizeof( double );
+      line[i] = QgsPoint( x, y, z);
+    }
+    else
+    {
+      line[i] = QgsPoint( x, y );
+    }
   }
 
   return line;
@@ -6140,7 +6172,7 @@ QgsPolyline QgsGeometry::asPolyline( unsigned char*& ptr, bool hasZValue )
 
 QgsPolygon QgsGeometry::asPolygon( unsigned char*& ptr, bool hasZValue )
 {
-  double x, y;
+  double x, y, z;
 
   ptr += 5;
 
@@ -6168,9 +6200,15 @@ QgsPolygon QgsGeometry::asPolygon( unsigned char*& ptr, bool hasZValue )
       ptr += 2 * sizeof( double );
 
       if ( hasZValue )
+      {
+	z = *(( double * ) ptr );
+	ring[jdx] = QgsPoint( x, y, z );
         ptr += sizeof( double );
-
-      ring[jdx] = QgsPoint( x, y );
+      }
+      else
+      {
+	ring[jdx] = QgsPoint( x, y );
+      }
     }
 
     rings[idx] = ring;

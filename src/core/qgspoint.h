@@ -19,6 +19,7 @@
 #define QGSPOINT_H
 
 #include <qgis.h>
+#include <qgsnumeric.h>
 
 #include <iostream>
 #include <QString>
@@ -31,11 +32,14 @@
 
 class CORE_EXPORT QgsVector
 {
-    double m_x, m_y;
+  double m_x, m_y, m_z;
 
   public:
     QgsVector();
     QgsVector( double x, double y );
+    QgsVector( double x, double y, double z );
+
+    bool is3D() const;
 
     QgsVector operator-( void ) const;
     QgsVector operator*( double scalar ) const;
@@ -45,6 +49,7 @@ class CORE_EXPORT QgsVector
 
     double x() const;
     double y() const;
+    double z() const;
 
     // perpendicular vector (rotated 90° counter-clockwise)
     QgsVector perpVector() const;
@@ -64,7 +69,7 @@ class CORE_EXPORT QgsPoint
 {
   public:
     /// Default constructor
-    QgsPoint() : m_x( 0.0 ), m_y( 0.0 )
+    QgsPoint() : m_x( 0.0 ), m_y( 0.0 ), m_z( NaN() )
     {}
 
     /*! Create a point from another point */
@@ -75,8 +80,21 @@ class CORE_EXPORT QgsPoint
      * @param y y coordinate
      */
     QgsPoint( double x, double y )
-        : m_x( x ), m_y( y )
+      : m_x( x ), m_y( y ), m_z( NaN() )
     {}
+
+    /*! Create a point from x,y,z coordinates
+     * @param x x coordinate
+     * @param y y coordinate
+     * @param z z coordinate
+     */
+    QgsPoint( double x, double y, double z )
+      : m_x( x ), m_y( y ), m_z( z )
+    {}
+
+    /*! Test point dimension
+     */
+    bool is3D() const { return !isNaN( m_z ); }
 
     ~QgsPoint()
     {}
@@ -97,11 +115,27 @@ class CORE_EXPORT QgsPoint
       m_y = y;
     }
 
+    /*! Sets the z value of the point
+     * @param z z coordinate
+     */
+    void setZ( double z )
+    {
+      m_z = z;
+    }
+
     /*! Sets the x and y value of the point */
     void set( double x, double y )
     {
       m_x = x;
       m_y = y;
+    }
+
+    /*! Sets the x, y and z value of the point */
+    void set( double x, double y, double z )
+    {
+      m_x = x;
+      m_y = y;
+      m_z = z;
     }
 
     /*! Get the x value of the point
@@ -118,6 +152,14 @@ class CORE_EXPORT QgsPoint
     double y() const
     {
       return m_y;
+    }
+
+    /*! Get the z value of the point
+     * @return z coordinate
+     */
+    double z() const
+    {
+      return m_z;
     }
 
     //! String representation of the point (x,y)
@@ -193,16 +235,23 @@ class CORE_EXPORT QgsPoint
     //! y coordinate
     double m_y;
 
+    //! z coordinate
+    double m_z;
 
 }; // class QgsPoint
 
 
 inline bool operator==( const QgsPoint &p1, const QgsPoint &p2 )
 {
-  if (( p1.x() == p2.x() ) && ( p1.y() == p2.y() ) )
-    { return true; }
-  else
-    { return false; }
+  if ( p1.is3D() != p2.is3D() )
+  {
+    return false;
+  }
+  if ( p1.is3D() )
+  {
+    return (( p1.x() == p2.x() ) && ( p1.y() == p2.y() ) && ( p1.z() == p2.z() ));
+  }
+  return (( p1.x() == p2.x() ) && ( p1.y() == p2.y() ));
 }
 
 inline std::ostream& operator << ( std::ostream& os, const QgsPoint &p )

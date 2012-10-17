@@ -46,7 +46,7 @@ INCLUDE_DIRECTORIES(
      ${CMAKE_CURRENT_BINARY_DIR}
      ${OSGEARTH_INCLUDE_DIR}
      ${GEOS_INCLUDE_DIR}
-     ../../core ../../core/raster ../../core/renderer ../../core/symbology
+     ../../core ../../core/raster ../../core/renderer ../../core/symbology ../../core/symbology-ng
      ../../gui
      ..
 )
@@ -63,9 +63,60 @@ TARGET_LINK_LIBRARIES(globeplugin
   ${OSGVIEWER_LIBRARY}
   ${OSGEARTH_LIBRARY}
   ${OSGEARTHFEATURES_LIBRARY}
+  ${OSGEARTHSYMBOLOGY_LIBRARY}
   ${OSGEARTHUTIL_LIBRARY}
   ${OPENTHREADS_LIBRARY}
 )
+
+###################################################
+# osgEarth plugin
+###################################################
+
+SET(OSGEARTH_PLUGIN_PREFIX "")
+IF(UNIX AND NOT WIN32 AND NOT APPLE)
+  IF(CMAKE_SIZEOF_VOID_P MATCHES "8")
+    SET(LIB_POSTFIX "64" CACHE STRING "suffix for 32/64 dir placement")
+    MARK_AS_ADVANCED(LIB_POSTFIX)
+  ENDIF(CMAKE_SIZEOF_VOID_P MATCHES "8")
+ENDIF(UNIX AND NOT WIN32 AND NOT APPLE)
+IF(NOT DEFINED LIB_POSTFIX)
+  SET(LIB_POSTFIX "")
+ENDIF(NOT DEFINED LIB_POSTFIX)
+SET( DYNAMIC_OSGEARTH "ON" )
+SET(OSGEARTH_USER_DEFINED_DYNAMIC_OR_STATIC "SHARED")
+
+INCLUDE( OsgEarthMacroUtils )
+
+SET(TARGET_SRC
+    QGISFeatureSource.cpp
+)
+
+SET(TARGET_H
+    QGISFeatureOptions
+)
+
+SET(TARGET_COMMON_LIBRARIES ${TARGET_COMMON_LIBRARIES}
+  qgis_core
+  qgis_gui
+#  ${QT_QTOPENGL_LIBRARY}
+  ${OSGDB_LIBRARY}
+#  ${OSGGA_LIBRARY}
+#  ${OSGUTIL_LIBRARY}
+  ${OSG_LIBRARY}
+#  ${OSGQT_LIBRARY}
+#  ${OSGVIEWER_LIBRARY}
+  ${OSGEARTH_LIBRARY}
+  ${OSGEARTHFEATURES_LIBRARY}
+  ${OSGEARTHSYMBOLOGY_LIBRARY}
+  ${OSGEARTHUTIL_LIBRARY}
+  ${OPENTHREADS_LIBRARY}
+)
+SETUP_PLUGIN(osgearth_feature_qgis)
+
+# to install public driver includes:
+SET(LIB_NAME feature_qgis)
+SET(LIB_PUBLIC_HEADERS ${TARGET_H})
+INCLUDE(ModuleInstallOsgEarthDriverIncludes OPTIONAL)
 
 
 ########################################################

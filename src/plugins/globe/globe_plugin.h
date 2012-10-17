@@ -21,6 +21,7 @@
 
 #include "../qgisplugin.h"
 #include "qgsosgearthtilesource.h"
+#include "QGISFeatureSource"
 #include "globe_plugin_dialog.h"
 #include <QObject>
 #include <osgViewer/Viewer>
@@ -35,7 +36,8 @@
 class QAction;
 class QToolBar;
 class QgisInterface;
-
+class QgsVectorLayer;
+class QgsMapLayer;
 
 class GlobePlugin : public QObject, public QgisPlugin
 {
@@ -101,6 +103,8 @@ class GlobePlugin : public QObject, public QgisPlugin
     void setupMap();
     //!  Setup map controls
     void setupControls();
+    //!  Add a vector layer
+    ModelLayer* addVectorLayer( QgsVectorLayer* );
 
   private://! Checks if the globe is open
     int mPluginType;
@@ -124,6 +128,8 @@ class GlobePlugin : public QObject, public QgisPlugin
     osgEarth::ImageLayer* mQgisMapLayer;
     //! Tile source
     osgEarth::Drivers::QgsOsgEarthTileSource* mTileSource;
+    //! Model source
+    osgEarth::Drivers::QGISFeatureSource* mModelSource;
     //! Control Canvas
     osgEarth::Util::Controls21::ControlCanvas* mControlCanvas;
     //! Elevation manager
@@ -135,6 +141,8 @@ class GlobePlugin : public QObject, public QgisPlugin
     //! coordinates of the right-clicked point on the globe
     double mSelectedLat, mSelectedLon, mSelectedElevation;
 
+  private slots:
+  void onLayerAdded( QgsMapLayer* );
   signals:
     //! emits current mouse position
     void xyCoordinates( const QgsPoint & p );

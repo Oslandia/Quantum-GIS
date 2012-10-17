@@ -372,6 +372,7 @@ SET(QGIS_CORE_HDRS
   qgspalobjectpositionmanager.h
   qgspluginlayer.h
   qgspluginlayerregistry.h
+  qgsnumeric.h
   qgspoint.h
   qgsproject.h
   qgsprojectfiletransform.h

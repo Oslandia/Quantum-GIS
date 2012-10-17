@@ -28,21 +28,35 @@
 // QgsVector
 //
 
-QgsVector::QgsVector() : m_x( 0.0 ), m_y( 0.0 )
+QgsVector::QgsVector() : m_x( 0.0 ), m_y( 0.0 ), m_z( NaN() )
 {
 }
 
-QgsVector::QgsVector( double x, double y ) : m_x( x ), m_y( y )
+QgsVector::QgsVector( double x, double y ) : m_x( x ), m_y( y ), m_z( NaN() )
 {
 }
+
+QgsVector::QgsVector( double x, double y, double z ) : m_x( x ), m_y( y ), m_z( z )
+{
+}
+
+bool QgsVector::is3D() const { return isNaN( m_z ); }
 
 QgsVector QgsVector::operator-( void ) const
 {
+  if ( is3D() )
+  {
+    return QgsVector( -m_x, -m_y, -m_z );
+  }
   return QgsVector( -m_x, -m_y );
 }
 
 QgsVector QgsVector::operator*( double scalar ) const
 {
+  if ( is3D() )
+  {
+    return QgsVector( m_x * scalar, m_y * scalar, m_z * scalar );
+  }
   return QgsVector( m_x * scalar, m_y * scalar );
 }
 
@@ -53,11 +67,19 @@ QgsVector QgsVector::operator/( double scalar ) const
 
 double QgsVector::operator*( QgsVector v ) const
 {
+  if ( is3D() && v.is3D() )
+  {
+    return m_x * v.m_x + m_y * v.m_y + m_z * v.m_z;
+  }
   return m_x * v.m_x + m_y * v.m_y;
 }
 
 double QgsVector::length() const
 {
+  if ( is3D() )
+  {
+    return sqrt( m_x * m_x + m_y * m_y + m_z * m_z );
+  }
   return sqrt( m_x * m_x + m_y * m_y );
 }
 
@@ -69,6 +91,11 @@ double QgsVector::x() const
 double QgsVector::y() const
 {
   return m_y;
+}
+
+double QgsVector::z() const
+{
+  return m_z;
 }
 
 // perpendicular vector (rotated 90° counter-clockwise)
@@ -116,6 +143,7 @@ QgsPoint::QgsPoint( const QgsPoint& p )
 {
   m_x = p.x();
   m_y = p.y();
+  m_z = p.z();
 }
 
 QString QgsPoint::toString() const
@@ -124,6 +152,10 @@ QString QgsPoint::toString() const
   QTextStream ot( &rep );
   ot.setRealNumberPrecision( 12 );
   ot << m_x << ", " << m_y;
+  if ( is3D() )
+  {
+    ot << ", " << m_z;
+  }
   return rep;
 }
 
@@ -131,6 +163,11 @@ QString QgsPoint::toString( int thePrecision ) const
 {
   QString x = qIsFinite( m_x ) ? QString::number( m_x, 'f', thePrecision ) : QObject::tr( "infinite" );
   QString y = qIsFinite( m_y ) ? QString::number( m_y, 'f', thePrecision ) : QObject::tr( "infinite" );
+  if ( is3D() )
+  {
+    QString z = qIsFinite( m_z ) ? QString::number( m_z, 'f', thePrecision ) : QObject::tr( "infinite" );
+    return QString( "%1,%2,%3" ).arg( x ).arg( y ).arg( z );
+  }
   return QString( "%1,%2" ).arg( x ).arg( y );
 }
 
@@ -180,7 +217,14 @@ QString QgsPoint::toDegreesMinutes( int thePrecision ) const
 
 QString QgsPoint::wellKnownText() const
 {
-  return QString( "POINT(%1 %2)" ).arg( QString::number( m_x, 'f', 18 ) ).arg( QString::number( m_y, 'f', 18 ) );
+  if ( !is3D() )
+  {
+    return QString( "POINT(%1 %2)" ).arg( QString::number( m_x, 'f', 18 ) ).arg( QString::number( m_y, 'f', 18 ) );
+  }
+  return QString( "POINT(%1 %2 %3)" )
+    .arg( QString::number( m_x, 'f', 18 ) )
+    .arg( QString::number( m_y, 'f', 18 ) )
+    .arg( QString::number( m_z, 'f', 18 ) );
 }
 
 double QgsPoint::sqrDist( double x, double y ) const
@@ -203,18 +247,25 @@ double QgsPoint::azimuth( const QgsPoint& other )
 // operators
 bool QgsPoint::operator==( const QgsPoint & other )
 {
-  if (( m_x == other.x() ) && ( m_y == other.y() ) )
-    return true;
-  else
+  if ( is3D() != other.is3D() )
     return false;
+  if ( is3D() )
+  {
+    return (( m_x == other.x() ) && ( m_y == other.y() ) && ( m_z == other.z() ));
+  }
+  // else
+  return (( m_x == other.x() ) && ( m_y == other.y() ) );
 }
 
 bool QgsPoint::operator!=( const QgsPoint & other ) const
 {
-  if (( m_x == other.x() ) && ( m_y == other.y() ) )
-    return false;
-  else
+  if ( is3D() != other.is3D() )
     return true;
+  if ( is3D() )
+  {
+    return (( m_x != other.x() ) || ( m_y != other.y() ) || ( m_z != other.z() ));
+  }
+  return (( m_x != other.x() ) || ( m_y != other.y() ) );
 }
 
 QgsPoint & QgsPoint::operator=( const QgsPoint & other )
@@ -223,6 +274,7 @@ QgsPoint & QgsPoint::operator=( const QgsPoint & other )
   {
     m_x = other.x();
     m_y = other.y();
+    m_z = other.z();
   }
 
   return *this;
@@ -232,6 +284,10 @@ void QgsPoint::multiply( const double& scalar )
 {
   m_x *= scalar;
   m_y *= scalar;
+  if ( is3D() )
+  {
+    m_z *= scalar;
+  }
 }
 
 int QgsPoint::onSegment( const QgsPoint& a, const QgsPoint& b ) const

@@ -20,6 +20,7 @@
 #include "globe_plugin_dialog.h"
 #include "qgsosgearthtilesource.h"
 #include "osgEarthQt/ViewerWidget"
+#include "QGISFeatureSource"
 
 #include <cmath>
 
@@ -32,6 +33,10 @@
 #include <qgsgeometry.h>
 #include <qgspoint.h>
 #include <qgsdistancearea.h>
+#include <qgsvectordataprovider.h>
+#include <qgssymbolv2.h>
+#include <qgsrendererv2.h>
+#include <qgsmaplayerregistry.h>
 
 #include <QAction>
 #include <QToolBar>
@@ -55,6 +60,7 @@
 #include <osgEarthUtil/AutoClipPlaneHandler>
 #include <osgEarthDrivers/gdal/GDALOptions>
 #include <osgEarthDrivers/tms/TMSOptions>
+#include <osgEarthDrivers/model_feature_geom/FeatureGeomModelOptions>
 
 using namespace osgEarth::Drivers;
 using namespace osgEarth::Util::Controls21;
@@ -298,6 +304,14 @@ void GlobePlugin::run()
   {
     mViewerWidget->show();
   }
+
+  // Connect to addition / removal of layers
+  QgsMapLayerRegistry* layerRegistry = QgsMapLayerRegistry::instance();
+  if ( layerRegistry )
+  {
+    //    connect( layerRegistry, SIGNAL( layerWillBeRemoved( QString ) ), this, SLOT( onLayerRemoved( QString ) ) );
+    connect( layerRegistry, SIGNAL( layerWasAdded( QgsMapLayer* ) ), this, SLOT( onLayerAdded( QgsMapLayer* ) ) );
+  }
 }
 
 void GlobePlugin::settings()
@@ -309,6 +323,61 @@ void GlobePlugin::settings()
   }
 }
 
+ModelLayer* GlobePlugin::addVectorLayer( QgsVectorLayer* vectorLayer )
+{
+    QgsVectorDataProvider* provider = vectorLayer->dataProvider();
+    QgsCoordinateReferenceSystem layerCrs = vectorLayer->crs();
+    if ( "EPSG:4326" != layerCrs.authid() )
+    {
+      // TODO transform
+    }
+
+    QGISFeatureOptions featureOpt;
+    //    featureOpt.layerId() = vectorLayer->name().toStdString();
+    std::cout << "vectorLayer = " << vectorLayer << std::endl;
+    featureOpt.setLayer( vectorLayer );
+    featureOpt.setQgis( mQGisIface );
+
+    Style style;
+    QList<QgsSymbolV2*> symbols = vectorLayer->rendererV2()->symbols();
+    for ( QList<QgsSymbolV2*>::iterator sit = symbols.begin(); sit != symbols.end(); ++sit )
+    {
+      QgsSymbolV2* sym = *sit;
+      if ( sym->type() == QgsSymbolV2::Line )
+      {
+	LineSymbol* ls = style.getOrCreateSymbol<LineSymbol>();
+	QColor color = sym->color();
+	ls->stroke()->color() = osg::Vec4f( color.redF(), color.greenF(), color.blueF(), color.alphaF() );
+	ls->stroke()->width() = 1.0f;
+      }
+      else if ( sym->type() == QgsSymbolV2::Fill )
+      {
+	// TODO access border color, etc.
+	PolygonSymbol* poly = style.getOrCreateSymbol<PolygonSymbol>();
+	QColor color = sym->color();
+	poly->fill()->color() = osg::Vec4f( color.redF(), color.greenF(), color.blueF(), color.alphaF() );
+      }
+    }
+
+    FeatureGeomModelOptions worldOpt;
+    worldOpt.featureOptions() = featureOpt;
+    worldOpt.styles() = new StyleSheet();
+    worldOpt.styles()->addStyle( style );
+    worldOpt.enableLighting() = false;
+    worldOpt.depthTestEnabled() = false;
+
+    ModelLayerOptions modelOptions( "qgis features", worldOpt );
+    return new ModelLayer( modelOptions );
+}
+
+void GlobePlugin::onLayerAdded( QgsMapLayer* layer )
+{
+  QgsVectorLayer* vectorLayer = dynamic_cast<QgsVectorLayer*>( layer );
+  if ( ! vectorLayer )
+    return;
+
+  mMapNode->getMap()->addModelLayer( addVectorLayer( vectorLayer ) );
+}
 void GlobePlugin::setupMap()
 {
   QSettings settings;
@@ -321,16 +390,17 @@ void GlobePlugin::setupMap()
   osgEarth::Map *map = new osgEarth::Map( mapOptions );
 
   //Default image layer
-  /*
+#if 0
   GDALOptions driverOptions;
   driverOptions.url() = QDir::cleanPath( QgsApplication::pkgDataPath() + "/globe/world.tif" ).toStdString();
   ImageLayerOptions layerOptions( "world", driverOptions );
   layerOptions.cacheEnabled() = false;
   map->addImageLayer( new osgEarth::ImageLayer( layerOptions ) );
-  */
+#else
   TMSOptions imagery;
   imagery.url() = "http://readymap.org/readymap/tiles/1.0.0/7/";
   map->addImageLayer( new ImageLayer( "Imagery", imagery ) );
+#endif
 
   MapNodeOptions nodeOptions;
   //nodeOptions.proxySettings() =
@@ -378,6 +448,16 @@ void GlobePlugin::setupMap()
     }
   }
 
+  // add 3D layers
+  QList<QgsMapLayer*> layers = mQGisIface->mapCanvas()->layers();
+  for ( QList<QgsMapLayer*>::const_iterator lit = layers.begin(); lit != layers.end(); ++lit )
+  {
+    QgsVectorLayer* vectorLayer = dynamic_cast<QgsVectorLayer*>( *lit );
+    if ( ! vectorLayer )
+      continue;
+
+    map->addModelLayer( addVectorLayer( vectorLayer ) );
+  }
 }
 
 void GlobePlugin::projectReady()
@@ -462,7 +542,8 @@ void GlobePlugin::syncExtent()
 
   OE_NOTICE << "map extent: " << height << " camera distance: " << distance << std::endl;
 
-  osgEarth::Util::Viewpoint viewpoint( osg::Vec3d( extent.center().x(), extent.center().y(), 0.0 ), 0.0, -90.0, distance );
+  //  osgEarth::Util::Viewpoint viewpoint( osg::Vec3d( extent.center().x(), extent.center().y(), 0.0 ), 0.0, -90.0, distance * 2);
+  osgEarth::Util::Viewpoint viewpoint( osg::Vec3d( extent.center().x(), extent.center().y(), 0.0 ), 0.0, -90.0, 100.0);
   manip->setViewpoint( viewpoint, 4.0 );
 }
 
@@ -729,6 +810,7 @@ void GlobePlugin::imageLayersChanged()
     }
 
     //add QGIS layer
+#if 0
     QgsDebugMsg( "addMapLayer" );
     mTileSource = new QgsOsgEarthTileSource( mQGisIface );
     mTileSource->initialize( "", 0 );
@@ -736,6 +818,7 @@ void GlobePlugin::imageLayersChanged()
     mQgisMapLayer = new ImageLayer( options, mTileSource );
     map->addImageLayer( mQgisMapLayer );
     mQgisMapLayer->setCache( 0 ); //disable caching
+#endif
   }
   else
   {
@@ -765,6 +848,7 @@ void GlobePlugin::elevationLayersChanged()
       map->removeElevationLayer( *i );
     }
 
+#if 0
     // Add elevation layers
     QSettings settings;
     QString cacheDirectory = settings.value( "cache/directory", QgsApplication::qgisSettingsDirPath() + "cache" ).toString();
@@ -792,6 +876,7 @@ void GlobePlugin::elevationLayersChanged()
 
       if ( !cache || type == "Worldwind" ) layer->setCache( 0 ); //no tms cache for worldwind (use worldwind_cache)
     }
+#endif
   }
   else
   {

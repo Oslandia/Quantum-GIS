@@ -43,7 +43,7 @@ unsigned char* QgsFeatureRendererV2::_getPoint( QPointF& pt, QgsRenderContext& c
   double x = *(( double * ) wkb ); wkb += sizeof( double );
   double y = *(( double * ) wkb ); wkb += sizeof( double );
 
-  if ( wkbType == QGis::WKBPolygon25D )
+  if ( wkbType >= QGis::WKBPoint25D )
     wkb += sizeof( double );
 
   if ( context.coordinateTransform() )
@@ -66,7 +66,7 @@ unsigned char* QgsFeatureRendererV2::_getLineString( QPolygonF& pts, QgsRenderCo
   unsigned int nPoints = *(( int* ) wkb );
   wkb += sizeof( unsigned int );
 
-  bool hasZValue = ( wkbType == QGis::WKBLineString25D );
+  bool hasZValue = ( wkbType >= QGis::WKBPoint25D );
   double x, y;
 #ifdef ANDROID
   qreal z;
@@ -128,7 +128,7 @@ unsigned char* QgsFeatureRendererV2::_getPolygon( QPolygonF& pts, QList<QPolygon
   if ( numRings == 0 )  // sanity check for zero rings in polygon
     return wkb;
 
-  bool hasZValue = ( wkbType == QGis::WKBPolygon25D );
+  bool hasZValue = ( wkbType >= QGis::WKBPoint25D );
   double x, y;
   holes.clear();
 

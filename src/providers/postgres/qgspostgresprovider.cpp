@@ -33,6 +33,8 @@
 #include "qgspostgresdataitems.h"
 #include "qgslogger.h"
 
+#define GEOM3D
+
 const QString POSTGRES_KEY = "postgres";
 const QString POSTGRES_DESCRIPTION = "PostgreSQL/PostGIS data provider";
 
@@ -251,11 +253,18 @@ bool QgsPostgresProvider::declareCursor(
 
     if ( fetchGeometry )
     {
+#ifdef GEOM3D
+      query += QString( "%1(%3,'%4')" )
+               .arg( mConnectionRO->majorVersion() < 2 ? "asbinary" : "st_asbinary" )
+               .arg( quotedIdentifier( mGeometryColumn, mIsGeography ) )
+               .arg( endianString() );
+#else
       query += QString( "%1(%2(%3),'%4')" )
                .arg( mConnectionRO->majorVersion() < 2 ? "asbinary" : "st_asbinary" )
                .arg( mConnectionRO->majorVersion() < 2 ? "force_2d" : "st_force_2d" )
                .arg( quotedIdentifier( mGeometryColumn, mIsGeography ) )
                .arg( endianString() );
+#endif
       delim = ",";
     }
 
@@ -429,6 +438,65 @@ bool QgsPostgresProvider::getFeature( QgsPostgresResult &queryResult, int row, b
         unsigned char *featureGeom = new unsigned char[returnedLength + 1];
         memset( featureGeom, 0, returnedLength + 1 );
         memcpy( featureGeom, PQgetvalue( queryResult.result(), row, col ), returnedLength );
+#ifdef GEOM3D
+	// modify 2.5D WKB types to make them compliant with OGR
+	unsigned int wkbType;
+	memcpy( &wkbType, featureGeom + 1, sizeof( wkbType) );
+	if ( wkbType >= 1000 )
+	{
+	  wkbType = wkbType - 1000 + QGis::WKBPoint25D - 1;
+	  memcpy( featureGeom + 1, &wkbType, sizeof( wkbType) );
+	}
+
+	// change wkb type of inner geometries
+	if ( wkbType == QGis::WKBMultiPoint25D ||
+	     wkbType == QGis::WKBMultiLineString25D ||
+	     wkbType == QGis::WKBMultiPolygon25D )
+	{
+	  unsigned int numGeoms = *(( int* )( featureGeom + 5 ));
+	  unsigned char* wkb = featureGeom + 9;
+	  for ( unsigned int i = 0; i < numGeoms; ++i )
+	  {
+	    unsigned int localType;
+	    memcpy( &localType, wkb + 1, sizeof( localType) );
+	    if ( localType >= 1000 )
+	    {
+	      localType = localType - 1000 + QGis::WKBPoint25D - 1;
+	      memcpy( wkb + 1, &localType, sizeof( localType) );
+	    }
+	    // skip endian and type info
+	    wkb += sizeof( unsigned int ) + 1;
+
+	    // skip coordinates
+	    switch ( wkbType )
+	    {
+	    case QGis::WKBMultiPoint25D:
+	      wkb += sizeof( double ) * 3;
+	      break;
+	    case QGis::WKBMultiLineString25D:
+	      {
+		unsigned int nPoints = *(( int* ) wkb );
+		wkb += sizeof( nPoints );
+		wkb += sizeof( double ) * 3 * nPoints;
+	      }
+	      break;
+	    default:
+	    case QGis::WKBMultiPolygon25D:
+	      {
+		unsigned int nRings = *(( int* ) wkb );
+		wkb += sizeof( nRings );
+		for ( unsigned int j = 0; j < nRings; ++j )
+		{
+		  unsigned int nPoints = *(( int* ) wkb );
+		  wkb += sizeof( nPoints );
+		  wkb += sizeof( double ) * 3 * nPoints;
+		}
+	      }
+	      break;
+	    }
+	  }
+	}
+#endif
         feature.setGeometryAndOwnership( featureGeom, returnedLength + 1 );
       }
       else
