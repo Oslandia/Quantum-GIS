@@ -67,6 +67,7 @@ namespace osgEarth { namespace Features
 	  const QgsPoint& pt = poly[0][j];
 	  retPoly->push_back( osg::Vec3d( pt.x(), pt.y(), pt.is3D() ? pt.z() : 0.0 ) );
 	}
+	retPoly->rewind( Symbology::Ring::ORIENTATION_CCW );
 
 	size_t nRings = poly.size();
 	for ( size_t i = 1; i < nRings; ++i )
@@ -78,6 +79,7 @@ namespace osgEarth { namespace Features
 	    const QgsPoint& pt = poly[i][j];
 	    innerRing->push_back( osg::Vec3d( pt.x(), pt.y(), pt.is3D() ? pt.z() : 0.0 ) );
 	  }
+	  innerRing->rewind( Symbology::Ring::ORIENTATION_CW );
 	  retPoly->getHoles().push_back( osg::ref_ptr<Ring>( innerRing ) );
 	}
 	return retPoly;
@@ -139,6 +141,7 @@ namespace osgEarth { namespace Features
 	    const QgsPoint& pt = poly[0][j];
 	    retPoly->push_back( osg::Vec3d( pt.x(), pt.y(), pt.is3D() ? pt.z() : 0.0 ) );
 	  }
+	  retPoly->rewind( Symbology::Ring::ORIENTATION_CCW );
 
 	  // inner rings, if any
 	  for ( size_t i = 1; i < nRings; ++i )
@@ -150,6 +153,7 @@ namespace osgEarth { namespace Features
 	      const QgsPoint& pt = poly[i][j];
 	      innerRing->push_back( osg::Vec3d( pt.x(), pt.y(), pt.is3D() ? pt.z() : 0.0 ) );
 	    }
+	    innerRing->rewind( Symbology::Ring::ORIENTATION_CW );
 	    retPoly->getHoles().push_back( osg::ref_ptr<Ring>( innerRing ) );
 	  }
 	  // add polygon to the returned multi geometry

@@ -61,9 +61,11 @@
 #include <osgEarthDrivers/gdal/GDALOptions>
 #include <osgEarthDrivers/tms/TMSOptions>
 #include <osgEarthDrivers/model_feature_geom/FeatureGeomModelOptions>
+#include <osgEarthUtil/SkyNode>
 
 using namespace osgEarth::Drivers;
 using namespace osgEarth::Util::Controls21;
+using namespace osgEarth::Util;
 
 #define MOVE_OFFSET 0.05
 
@@ -356,17 +358,28 @@ ModelLayer* GlobePlugin::addVectorLayer( QgsVectorLayer* vectorLayer )
 	PolygonSymbol* poly = style.getOrCreateSymbol<PolygonSymbol>();
 	QColor color = sym->color();
 	poly->fill()->color() = osg::Vec4f( color.redF(), color.greenF(), color.blueF(), color.alphaF() );
+	style.addSymbol( poly );
+
+#if 0
+	// TODO: find a way to add a LineSymbol to the style
+	Style style2;
+	LineSymbol* ls = style2.getOrCreateSymbol<LineSymbol>();
+	ls->stroke()->color() = osg::Vec4f( 0.0, 0.0, 0.0, 1.0 );
+	ls->stroke()->width() = 1.0f;
+	style = style.combineWith( style2 );
+#endif
       }
     }
 
-    FeatureGeomModelOptions worldOpt;
-    worldOpt.featureOptions() = featureOpt;
-    worldOpt.styles() = new StyleSheet();
-    worldOpt.styles()->addStyle( style );
-    worldOpt.enableLighting() = false;
-    worldOpt.depthTestEnabled() = false;
+    FeatureGeomModelOptions geomOpt;
+    geomOpt.featureOptions() = featureOpt;
+    geomOpt.styles() = new StyleSheet();
+    geomOpt.styles()->addStyle( style );
+    geomOpt.depthTestEnabled() = true;
+    //    worldOpt.enableLighting() = true;
 
-    ModelLayerOptions modelOptions( "qgis features", worldOpt );
+    ModelLayerOptions modelOptions( "qgis features", geomOpt );
+    //    modelOptions.lightingEnabled() = true;
     return new ModelLayer( modelOptions );
 }
 
@@ -390,12 +403,13 @@ void GlobePlugin::setupMap()
   osgEarth::Map *map = new osgEarth::Map( mapOptions );
 
   //Default image layer
-#if 0
+#if 1
   GDALOptions driverOptions;
   driverOptions.url() = QDir::cleanPath( QgsApplication::pkgDataPath() + "/globe/world.tif" ).toStdString();
-  ImageLayerOptions layerOptions( "world", driverOptions );
-  layerOptions.cacheEnabled() = false;
-  map->addImageLayer( new osgEarth::ImageLayer( layerOptions ) );
+  //  ImageLayerOptions layerOptions( "world", driverOptions );
+  //  layerOptions.cacheEnabled() = false;
+  //  map->addImageLayer( new osgEarth::ImageLayer( layerOptions ) );
+  map->addImageLayer( new osgEarth::ImageLayer( "basemap", driverOptions ) );
 #else
   TMSOptions imagery;
   imagery.url() = "http://readymap.org/readymap/tiles/1.0.0/7/";
@@ -404,7 +418,7 @@ void GlobePlugin::setupMap()
 
   MapNodeOptions nodeOptions;
   //nodeOptions.proxySettings() =
-  //nodeOptions.enableLighting() = false;
+  //  nodeOptions.enableLighting() = true;
 
   //LoadingPolicy loadingPolicy( LoadingPolicy::MODE_SEQUENTIAL );
   TerrainOptions terrainOptions;
