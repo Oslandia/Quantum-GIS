@@ -311,9 +311,10 @@ void GlobePlugin::run()
   QgsMapLayerRegistry* layerRegistry = QgsMapLayerRegistry::instance();
   if ( layerRegistry )
   {
-    //    connect( layerRegistry, SIGNAL( layerWillBeRemoved( QString ) ), this, SLOT( onLayerRemoved( QString ) ) );
+    connect( layerRegistry, SIGNAL( layerWillBeRemoved( QString ) ), this, SLOT( onLayerRemoved( QString ) ) );
     connect( layerRegistry, SIGNAL( layerWasAdded( QgsMapLayer* ) ), this, SLOT( onLayerAdded( QgsMapLayer* ) ) );
   }
+  connect( mQGisIface->mapCanvas(), SIGNAL( layersChanged() ), this, SLOT( onLayersChanged() ) );
 }
 
 void GlobePlugin::settings()
@@ -327,13 +328,6 @@ void GlobePlugin::settings()
 
 ModelLayer* GlobePlugin::addVectorLayer( QgsVectorLayer* vectorLayer )
 {
-    QgsVectorDataProvider* provider = vectorLayer->dataProvider();
-    QgsCoordinateReferenceSystem layerCrs = vectorLayer->crs();
-    if ( "EPSG:4326" != layerCrs.authid() )
-    {
-      // TODO transform
-    }
-
     QGISFeatureOptions featureOpt;
     //    featureOpt.layerId() = vectorLayer->name().toStdString();
     std::cout << "vectorLayer = " << vectorLayer << std::endl;
@@ -359,15 +353,6 @@ ModelLayer* GlobePlugin::addVectorLayer( QgsVectorLayer* vectorLayer )
 	QColor color = sym->color();
 	poly->fill()->color() = osg::Vec4f( color.redF(), color.greenF(), color.blueF(), color.alphaF() );
 	style.addSymbol( poly );
-
-#if 0
-	// TODO: find a way to add a LineSymbol to the style
-	Style style2;
-	LineSymbol* ls = style2.getOrCreateSymbol<LineSymbol>();
-	ls->stroke()->color() = osg::Vec4f( 0.0, 0.0, 0.0, 1.0 );
-	ls->stroke()->width() = 1.0f;
-	style = style.combineWith( style2 );
-#endif
       }
     }
 
@@ -375,12 +360,18 @@ ModelLayer* GlobePlugin::addVectorLayer( QgsVectorLayer* vectorLayer )
     geomOpt.featureOptions() = featureOpt;
     geomOpt.styles() = new StyleSheet();
     geomOpt.styles()->addStyle( style );
-    geomOpt.depthTestEnabled() = true;
+    //geomOpt.depthTestEnabled() = true;
     //    worldOpt.enableLighting() = true;
 
     ModelLayerOptions modelOptions( "qgis features", geomOpt );
-    //    modelOptions.lightingEnabled() = true;
-    return new ModelLayer( modelOptions );
+    modelOptions.lightingEnabled() = true;
+    ModelLayer* nLayer = new ModelLayer( modelOptions );
+
+    MapInfo info;
+    info.layer = nLayer;
+    info.visible = true;
+    mapMap.insert( std::make_pair( vectorLayer->id(), info ) );
+    return nLayer;
 }
 
 void GlobePlugin::onLayerAdded( QgsMapLayer* layer )
@@ -391,6 +382,73 @@ void GlobePlugin::onLayerAdded( QgsMapLayer* layer )
 
   mMapNode->getMap()->addModelLayer( addVectorLayer( vectorLayer ) );
 }
+
+void GlobePlugin::onLayerRemoved( QString layerName )
+{
+  mMapNode->getMap()->removeModelLayer( mapMap[layerName].layer );
+  mapMap.erase( mapMap.find(layerName) );
+}
+
+void GlobePlugin::onLayersChanged()
+{
+  std::cout << "onLayersChanged()" << std::endl;
+
+  QgsMapRenderer* renderer = mQGisIface->mapCanvas()->mapRenderer();
+  QStringList layers = renderer->layerSet();
+  for ( std::map< QString, MapInfo >::iterator it = mapMap.begin(); it != mapMap.end(); ++it )
+  {
+    if ( layers.indexOf( it->first ) != -1 )
+    {
+      if ( !it->second.visible )
+      {
+	it->second.visible = true;
+	// modify layer's visibility
+	it->second.layer->setEnabled( true );
+      }
+    }
+    else
+    {
+      if ( it->second.visible )
+      {
+	it->second.visible = false;
+	// modify layer's visibility
+	it->second.layer->setEnabled( false );
+      }
+    }
+  }
+}
+
+void traverseNodes( osg::Node* node, size_t indentSize = 0 )
+{
+  for ( size_t i = 0; i < indentSize; ++i )
+  {
+    std::cout << " ";
+  }
+  std::cout << "classname: " << node->className() << std::endl;
+
+  // get the state set
+  osg::StateSet* stateSet = node->getStateSet();
+  if ( stateSet )
+  {
+    osg::StateSet::ModeList& modes = stateSet->getModeList();
+    for ( osg::StateSet::ModeList::const_iterator it = modes.begin(); it != modes.end(); ++it )
+    {
+      std::cout << "mode " << it->first << " = " << it->second << std::endl;
+    }
+  }
+
+  osg::Group* group = node->asGroup();
+  if ( ! group )
+  {
+    return;
+  }
+
+  for ( size_t i = 0; i < group->getNumChildren(); ++i )
+  {
+    traverseNodes( group->getChild( i ), indentSize + 4 );
+  }
+}
+
 void GlobePlugin::setupMap()
 {
   QSettings settings;
@@ -403,7 +461,7 @@ void GlobePlugin::setupMap()
   osgEarth::Map *map = new osgEarth::Map( mapOptions );
 
   //Default image layer
-#if 1
+#if 0
   GDALOptions driverOptions;
   driverOptions.url() = QDir::cleanPath( QgsApplication::pkgDataPath() + "/globe/world.tif" ).toStdString();
   //  ImageLayerOptions layerOptions( "world", driverOptions );
@@ -411,9 +469,11 @@ void GlobePlugin::setupMap()
   //  map->addImageLayer( new osgEarth::ImageLayer( layerOptions ) );
   map->addImageLayer( new osgEarth::ImageLayer( "basemap", driverOptions ) );
 #else
-  TMSOptions imagery;
-  imagery.url() = "http://readymap.org/readymap/tiles/1.0.0/7/";
-  map->addImageLayer( new ImageLayer( "Imagery", imagery ) );
+  TMSOptions baseImg, streetsImg;
+  baseImg.url() = "http://readymap.org/readymap/tiles/1.0.0/7/";
+  streetsImg.url() = "http://readymap.org/readymap/tiles/1.0.0/35/";
+  map->addImageLayer( new ImageLayer( "Base Imagery", baseImg ) );
+  map->addImageLayer( new ImageLayer( "Streets Imagery", streetsImg ) );
 #endif
 
   MapNodeOptions nodeOptions;
@@ -542,6 +602,16 @@ void GlobePlugin::syncExtent()
 
   //get mapCanvas->extent().height() in meters
   QgsRectangle extent = mQGisIface->mapCanvas()->extent();
+
+  QgsMapRenderer* renderer = mQGisIface->mapCanvas()->mapRenderer();
+  QgsCoordinateTransform trans;
+  if ( renderer->destinationCrs().authid().compare( QString( "EPSG:4326" ), Qt::CaseInsensitive ) != 0 )
+  {
+	  trans.setSourceCrs( renderer->destinationCrs() );
+	  trans.setDestCRS( QgsCoordinateReferenceSystem( "EPSG:4326" ) );
+	  extent = trans.transform( extent );
+  }
+
   QgsDistanceArea dist;
   dist.setEllipsoidalMode( true );
   //dist.setProjectionsEnabled( true );
@@ -552,13 +622,16 @@ void GlobePlugin::syncExtent()
   //camera viewing angle
   double viewAngle = 30;
   //camera distance
-  double distance = height / tan( viewAngle * osg::PI / 180 ); //c = b*cotan(B(rad))
+  //  double distance = height / tan( viewAngle * osg::PI / 180 ); //c = b*cotan(B(rad))
+  double distance = height * tan( viewAngle * osg::PI / 180 ); //c = b*cotan(B(rad))
 
   OE_NOTICE << "map extent: " << height << " camera distance: " << distance << std::endl;
 
   //  osgEarth::Util::Viewpoint viewpoint( osg::Vec3d( extent.center().x(), extent.center().y(), 0.0 ), 0.0, -90.0, distance * 2);
-  osgEarth::Util::Viewpoint viewpoint( osg::Vec3d( extent.center().x(), extent.center().y(), 0.0 ), 0.0, -90.0, 100.0);
-  manip->setViewpoint( viewpoint, 4.0 );
+  //  distance *= 1000000;
+  height *= 200000;
+  osgEarth::Util::Viewpoint viewpoint( osg::Vec3d( extent.center().x(), extent.center().y(), 0.0 ), /* heading*/ 0.0, /*pitch*/-90, height);
+  manip->setViewpoint( viewpoint, 2.0 );
 }
 
 void GlobePlugin::setupControls()

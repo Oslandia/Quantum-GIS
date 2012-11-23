@@ -141,8 +141,20 @@ class GlobePlugin : public QObject, public QgisPlugin
     //! coordinates of the right-clicked point on the globe
     double mSelectedLat, mSelectedLon, mSelectedElevation;
 
+    //! map between QgsMapLayer and ModelLayer
+	struct MapInfo
+	{
+		ModelLayer* layer;
+		bool visible;
+	};
+	std::map< QString, MapInfo > mapMap;
+
   private slots:
-  void onLayerAdded( QgsMapLayer* );
+	void onLayerAdded( QgsMapLayer* );
+	void onLayerRemoved( QString );
+
+	// on map canvas layersChanged()
+	void onLayersChanged();
   signals:
     //! emits current mouse position
     void xyCoordinates( const QgsPoint & p );
