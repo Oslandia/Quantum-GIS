@@ -63,6 +63,8 @@
 #include <osgEarthDrivers/model_feature_geom/FeatureGeomModelOptions>
 #include <osgEarthUtil/SkyNode>
 
+// FIXME: bug with the mouse wheel on some data (?!)
+
 using namespace osgEarth::Drivers;
 using namespace osgEarth::Util::Controls21;
 using namespace osgEarth::Util;
@@ -229,6 +231,7 @@ void GlobePlugin::run()
 #ifdef QGISDEBUG
     if ( !getenv( "OSGNOTIFYLEVEL" ) ) osgEarth::setNotifyLevel( osg::DEBUG_INFO );
 #endif
+    osgEarth::setNotifyLevel( osg::INFO );
 
     mOsgViewer = new osgViewer::Viewer();
 
@@ -301,33 +304,40 @@ void GlobePlugin::run()
     mOsgViewer->addEventHandler( new QueryCoordinatesHandler( this, mElevationManager,
                                  mMapNode->getMap()->getProfile()->getSRS() )
                                );
+    // Connect to addition / removal of layers
+    QgsMapLayerRegistry* layerRegistry = QgsMapLayerRegistry::instance();
+    if ( layerRegistry )
+    {
+	    connect( layerRegistry, SIGNAL( layerWillBeRemoved( QString ) ), this, SLOT( onLayerRemoved( QString ) ) );
+	    connect( layerRegistry, SIGNAL( layerWasAdded( QgsMapLayer* ) ), this, SLOT( onLayerAdded( QgsMapLayer* ) ) );
+    }
+    connect( mQGisIface->mapCanvas(), SIGNAL( layersChanged() ), this, SLOT( onLayersChanged() ) );
   }
   else
   {
-    mViewerWidget->show();
+	  mViewerWidget->show();
   }
-
-  // Connect to addition / removal of layers
-  QgsMapLayerRegistry* layerRegistry = QgsMapLayerRegistry::instance();
-  if ( layerRegistry )
-  {
-    connect( layerRegistry, SIGNAL( layerWillBeRemoved( QString ) ), this, SLOT( onLayerRemoved( QString ) ) );
-    connect( layerRegistry, SIGNAL( layerWasAdded( QgsMapLayer* ) ), this, SLOT( onLayerAdded( QgsMapLayer* ) ) );
-  }
-  connect( mQGisIface->mapCanvas(), SIGNAL( layersChanged() ), this, SLOT( onLayersChanged() ) );
 }
 
+  
 void GlobePlugin::settings()
 {
-  mSettingsDialog->updatePointLayers();
-  if ( mSettingsDialog->exec() )
-  {
-    //viewer stereo settings set by mSettingsDialog and stored in QSettings
-  }
+	mSettingsDialog->updatePointLayers();
+	if ( mSettingsDialog->exec() )
+	{
+		//viewer stereo settings set by mSettingsDialog and stored in QSettings
+	}
+	
 }
 
 ModelLayer* GlobePlugin::addVectorLayer( QgsVectorLayer* vectorLayer )
 {
+	QgsVectorDataProvider* provider = vectorLayer->dataProvider();
+	if ( !provider->crs().isValid() )
+	{
+		std::cout << "Unable to find a valid input CRS ! "<< std::endl;
+		return 0;
+	}
     QGISFeatureOptions featureOpt;
     //    featureOpt.layerId() = vectorLayer->name().toStdString();
     std::cout << "vectorLayer = " << vectorLayer << std::endl;
@@ -380,7 +390,11 @@ void GlobePlugin::onLayerAdded( QgsMapLayer* layer )
   if ( ! vectorLayer )
     return;
 
-  mMapNode->getMap()->addModelLayer( addVectorLayer( vectorLayer ) );
+  ModelLayer* modelLayer = addVectorLayer( vectorLayer );
+  if ( modelLayer )
+  {
+	  mMapNode->getMap()->addModelLayer( modelLayer );
+  }
 }
 
 void GlobePlugin::onLayerRemoved( QString layerName )
@@ -469,10 +483,12 @@ void GlobePlugin::setupMap()
   //  map->addImageLayer( new osgEarth::ImageLayer( layerOptions ) );
   map->addImageLayer( new osgEarth::ImageLayer( "basemap", driverOptions ) );
 #else
-  TMSOptions baseImg, streetsImg;
+  TMSOptions baseImg;
   baseImg.url() = "http://readymap.org/readymap/tiles/1.0.0/7/";
-  streetsImg.url() = "http://readymap.org/readymap/tiles/1.0.0/35/";
   map->addImageLayer( new ImageLayer( "Base Imagery", baseImg ) );
+
+  TMSOptions streetsImg;
+  streetsImg.url() = "http://readymap.org/readymap/tiles/1.0.0/35/";
   map->addImageLayer( new ImageLayer( "Streets Imagery", streetsImg ) );
 #endif
 
@@ -530,7 +546,11 @@ void GlobePlugin::setupMap()
     if ( ! vectorLayer )
       continue;
 
-    map->addModelLayer( addVectorLayer( vectorLayer ) );
+    ModelLayer* modelLayer = addVectorLayer( vectorLayer );
+    if ( modelLayer )
+    {
+	    map->addModelLayer( modelLayer );
+    }
   }
 }
 
@@ -935,7 +955,7 @@ void GlobePlugin::elevationLayersChanged()
       map->removeElevationLayer( *i );
     }
 
-#if 0
+#if 1
     // Add elevation layers
     QSettings settings;
     QString cacheDirectory = settings.value( "cache/directory", QgsApplication::qgisSettingsDirPath() + "cache" ).toString();
@@ -1204,7 +1224,6 @@ bool QueryCoordinatesHandler::handle( const osgGA::GUIEventAdapter& ea, osgGA::G
   {
     osgViewer::View* view = static_cast<osgViewer::View*>( aa.asView() );
     osg::Vec3d coords = getCoords( ea.getX(), ea.getY(), view, false );
-
     OE_NOTICE << "SelectedCoordinates set to:\nLon: " << coords.x() << " Lat: " << coords.y()
     << " Ele: " << coords.z() << std::endl;
 

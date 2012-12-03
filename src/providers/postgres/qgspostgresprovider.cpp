@@ -442,11 +442,41 @@ bool QgsPostgresProvider::getFeature( QgsPostgresResult &queryResult, int row, b
 	// modify 2.5D WKB types to make them compliant with OGR
 	unsigned int wkbType;
 	memcpy( &wkbType, featureGeom + 1, sizeof( wkbType) );
+
+	// convert unsupported types to supported ones
+	switch ( wkbType )
+	{
+	case 15:
+		// 2D polyhedral => multipolygon
+		wkbType = 6;
+		break;
+	case 1015:
+		// 3D polyhedral => multipolygon
+		wkbType = 1006;
+		break;
+	case 17:
+		// 2D triangle => polygon
+		wkbType = 3;
+		break;
+	case 1017:
+		// 3D triangle => polygon
+		wkbType = 1003;
+		break;
+	case 16:
+		// 2D TIN => multipolygon
+		wkbType = 6;
+		break;
+	case 1016:
+		// TIN => multipolygon
+		wkbType = 1006;
+		break;
+	}
+	// convert from postgis types to qgis types
 	if ( wkbType >= 1000 )
 	{
 	  wkbType = wkbType - 1000 + QGis::WKBPoint25D - 1;
-	  memcpy( featureGeom + 1, &wkbType, sizeof( wkbType) );
 	}
+	memcpy( featureGeom + 1, &wkbType, sizeof( wkbType) );
 
 	// change wkb type of inner geometries
 	if ( wkbType == QGis::WKBMultiPoint25D ||
@@ -459,11 +489,39 @@ bool QgsPostgresProvider::getFeature( QgsPostgresResult &queryResult, int row, b
 	  {
 	    unsigned int localType;
 	    memcpy( &localType, wkb + 1, sizeof( localType) );
+	    switch ( localType )
+	    {
+	    case 15:
+		    // 2D polyhedral => multipolygon
+		    localType = 6;
+		    break;
+	    case 1015:
+		    // 3D polyhedral => multipolygon
+		    localType = 1006;
+		    break;
+	    case 17:
+		    // 2D triangle => polygon
+		    localType = 3;
+		    break;
+	    case 1017:
+		    // 3D triangle => polygon
+		    localType = 1003;
+		    break;
+	    case 16:
+		    // 2D TIN => multipolygon
+		    localType = 6;
+		    break;
+	    case 1016:
+		    // TIN => multipolygon
+		    localType = 1006;
+		    break;
+	    }
 	    if ( localType >= 1000 )
 	    {
-	      localType = localType - 1000 + QGis::WKBPoint25D - 1;
-	      memcpy( wkb + 1, &localType, sizeof( localType) );
+		    localType = localType - 1000 + QGis::WKBPoint25D - 1;
 	    }
+	    memcpy( wkb + 1, &localType, sizeof( localType) );
+
 	    // skip endian and type info
 	    wkb += sizeof( unsigned int ) + 1;
 

@@ -28,6 +28,15 @@ namespace osgEarth { namespace Features
     // hack constness, since QGIS is not const-clean
     QgsGeometry& geom = const_cast<QgsGeometry&>( geo );
 
+#if 0
+    // test srid
+    std::cout << "geom = " << &geom << std::endl;
+    std::cout << "wkb = " << geom.asWkb() << std::endl;
+    uint32_t srid;
+    memcpy( &srid, geom.asWkb() + 2 + sizeof(void*), sizeof(uint32_t) );
+    std::cout << "srid = " << srid << std::endl;
+#endif
+
     switch ( geom.wkbType() )
     {
     case QGis::WKBPoint:
@@ -173,7 +182,8 @@ namespace osgEarth { namespace Features
     QgsFeature& feat = const_cast<QgsFeature&>( fea );
 
     Feature* retFeat = new Feature( feat.id() );
-    const QgsGeometry* geom = feat.geometry();
+    QgsGeometry* geom = feat.geometry();
+
     Geometry* nGeom = geometryFromQgsGeometry( *geom );
     retFeat->setGeometry( nGeom );
     return retFeat;
@@ -255,6 +265,7 @@ namespace osgEarth { namespace Features
     if ( 0 == ref )
     {
       std::cout << "Cannot find the spatial reference" << std::endl;
+      return;
     }
     QgsRectangle next = provider->extent();
     GeoExtent ext( ref, next.xMinimum(), next.yMinimum(), next.xMaximum(), next.yMaximum() );
