@@ -1117,6 +1117,9 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     void osmImportDialog();
     void osmExportDialog();
 
+    /**reemit signal*/
+    void onPropertiesChanged( QgsMapLayer* );
+
   signals:
     /** emitted when a key is pressed and we want non widget sublasses to be able
       to pick up on this (e.g. maplayer) */
@@ -1158,6 +1161,9 @@ class QgisApp : public QMainWindow, private Ui::MainWindow
     void initializationCompleted();
 
     void customSrsValidation( QgsCoordinateReferenceSystem &crs );
+
+    /**Emitted when a layer's properties have been changed through the UI*/
+    void propertiesChanged( QgsMapLayer* );
 
   private:
     /** This method will open a dialog so the user can select GDAL sublayers to load

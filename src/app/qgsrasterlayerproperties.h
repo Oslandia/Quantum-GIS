@@ -122,6 +122,9 @@ class QgsRasterLayerProperties : public QgsOptionsDialogBase, private Ui::QgsRas
     /** emitted when changes to layer were saved to update legend */
     void refreshLegend( QString layerID, bool expandItem );
 
+    /** Emitted (with layer as parameter) when properties have changed */
+    void propertiesChanged( QgsMapLayer* );
+
   private:
     /** \brief  A constant that signals property not used */
     const QString TRSTRING_NOT_SET;

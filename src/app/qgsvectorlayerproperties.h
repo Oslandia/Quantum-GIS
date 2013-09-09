@@ -127,6 +127,9 @@ class QgsVectorLayerProperties : public QgsOptionsDialogBase, private Ui::QgsVec
 
     void toggleEditing( QgsMapLayer * );
 
+    /** Emitted (with layer as parameter) when properties have changed */
+    void propertiesChanged( QgsMapLayer* );
+
   private slots:
     /** toggle editing of layer */
     void toggleEditing();
