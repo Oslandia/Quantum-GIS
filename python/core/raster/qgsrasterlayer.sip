@@ -118,6 +118,9 @@ class QgsRasterLayer : QgsMapLayer
     //void setResampleFilter( QgsRasterResampleFilter* resampleFilter /Transfer/ );
     QgsRasterResampleFilter * resampleFilter() const;
 
+    QgsBrightnessContrastFilter * brightnessFilter() const;
+    QgsHueSaturationFilter * hueSaturationFilter() const;
+
     /** Get raster pipe */
     QgsRasterPipe * pipe();
 
