@@ -150,6 +150,9 @@ class CORE_EXPORT QgsAtlasComposition : public QObject
     /**Is emitted when the coverage layer for an atlas changes*/
     void coverageLayerChanged( QgsVectorLayer* layer );
 
+    void renderBegun();
+    void renderEnded();
+
   private:
     /**Updates the filename expression*/
     void updateFilenameExpression();

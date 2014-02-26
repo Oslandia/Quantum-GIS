@@ -444,6 +444,8 @@ class CORE_EXPORT QgsComposerMap : public QgsComposerItem
     /**Is emitted on rotation change to notify north arrow pictures*/
     void mapRotationChanged( double newRotation );
 
+    void preparedForAtlas();
+
   public slots:
 
     /**Called if map canvas has changed*/

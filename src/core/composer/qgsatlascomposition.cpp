@@ -263,6 +263,8 @@ bool QgsAtlasComposition::beginRender()
     return false;
   }
 
+  emit renderBegun();
+
   bool featuresUpdated = updateFeatures();
   if ( !featuresUpdated )
   {
@@ -293,6 +295,8 @@ void QgsAtlasComposition::endRender()
   }
 
   updateAtlasMaps();
+
+  emit renderEnded();
 }
 
 void QgsAtlasComposition::updateAtlasMaps()

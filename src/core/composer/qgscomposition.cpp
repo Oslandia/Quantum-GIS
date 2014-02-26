@@ -2517,6 +2517,7 @@ bool QgsComposition::setAtlasMode( QgsComposition::AtlasMode mode )
     if ( ! atlasHasFeatures )
     {
       mAtlasMode = QgsComposition::AtlasOff;
+      mAtlasComposition.endRender();
       return false;
     }
   }
